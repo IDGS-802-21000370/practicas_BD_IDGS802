@@ -1,0 +1,80 @@
+{% extends 'layout2.html' %}
+    {%from "_macros.html" import input_Form%}
+{%block content%}
+    <div class="container">
+        <div class="row">
+            <form name="registro" action="/pizzas" id="registro" method="POST">
+                <div class="row control-group">
+                    <div class="form-group col-xs-12 float-label-form-group controls">
+                        {{input_Form(form.nombre,class="form-control")}}
+                    </div>
+                </div>
+                <div class="row control-group">
+                    <div class="form-group col-xs-12 float-label-form-group controls">
+                        {{input_Form(form.direccion,class="form-control")}}
+                    </div>
+                </div>
+                <div class="row control-group">
+                    <div class="form-group col-xs-12 float-label-form-group controls">
+                        {{input_Form(form.telefono,class="form-control")}}
+                    </div>
+                </div>
+                <div class="row control-group">
+                    <div class="form-group col-xs-12 float-label-form-group controls">
+                        {{input_Form(form.tamanioPizza,class="form-control")}}
+                    </div>
+                </div>
+                <div class="row control-group">
+                    <div class="form-group col-xs-12 float-label-form-group controls">
+                        {{input_Form(form.jamon,class="form-control")}}
+                    </div>
+                </div>
+                <div class="row control-group">
+                    <div class="form-group col-xs-12 float-label-form-group controls">
+                        {{input_Form(form.pina,class="form-control")}}
+                    </div>
+                </div>
+                <div class="row control-group">
+                    <div class="form-group col-xs-12 float-label-form-group controls">
+                        {{input_Form(form.champinion,class="form-control")}}
+                    </div>
+                </div>
+                <div class="row control-group">
+                    <div class="form-group col-xs-12 float-label-form-group controls">
+                        {{input_Form(form.numPizzas,class="form-control")}}
+                    </div>
+                </div>
+                <table class="table table-striped table-bordered">
+                    <tr>
+                        <th>Tamaño</th>
+                        <th>Ingredientes</th>
+                        <th>Número de Pizzas</th>
+                        <th>Subtotal</th>
+                        <th>Eliminar</th>
+                    </tr>
+                    {% for pedido in p %}
+                    <tr>
+                        <td>{{ pedido['Tamanio'] }}</td>
+                        <td>{{ pedido['Ingredientes'] }}</td>
+                        <td>{{ pedido['Numero de Pizzas'] }}</td>
+                        <td>{{ pedido['Subtotal'] }}</td>
+                        <td>
+                            <form action="{{ url_for('eliminar_pedido', id=pedido['id']) }}" method="POST">
+                                <input type="hidden" name="csrf_token" value="{{csrf_token()}}"/>
+                                <button type="submit" class="btn btn-danger">Eliminar</button>
+                            </form>
+                        </td>                        
+                    </tr>
+                    {% endfor %}
+                </table>
+                <input type="hidden" name="csrf_token" value="{{csrf_token()}}"/>
+                <input type="submit" id="registrar" class="btn btn-info" name="registrar" value="Registrar"/>
+                <h1>{{nombre}} total 0</h1>
+            </form>
+            <form name="registro" action="/insertar" id="registro" method="POST">
+                <input type="hidden" name="csrf_token" value="{{csrf_token()}}"/>
+                <button type="submit" class="btn btn-warning">Insertar compra</button>
+            </form>
+        </div>
+    </div>
+{%endblock%}

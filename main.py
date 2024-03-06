@@ -1,9 +1,9 @@
-from flask import Flask, request, render_template, Response
+from flask import Flask, request, render_template, Response, redirect, url_for
 import forms
 from flask_wtf.csrf import CSRFProtect
 from config import DevelopmentConfig
 from flask import flash
-from models import Alumnos, Maestros, db
+from models import Alumnos, Maestros, Pizzas, db
 app = Flask(__name__)
 app.config.from_object(DevelopmentConfig)
 csrf=CSRFProtect()
@@ -70,6 +70,123 @@ def ABCompletoMaetros():
     profesor=Maestros.query.all()
     
     return render_template("ABC_CompletoMaetros.html", profesor=profesor)
+
+
+@app.route("/pizzas", methods=["GET", "POST"])
+def pizzas():
+    subTotal = 0.0
+    nombre = ""
+    tamaño = ""
+    numPizzas = 0
+    ingredientes = []
+    pizzas_form = forms.PizzasForm(request.form)
+    
+    if request.method == "POST" and pizzas_form.validate():
+        nombre = pizzas_form.nombre.data
+        tamaño = pizzas_form.tamanioPizza.data
+        numPizzas = pizzas_form.numPizzas.data
+        ingredientes_seleccionados = []
+
+        if pizzas_form.jamon.data:
+            ingredientes_seleccionados.append("Jamon")
+        if pizzas_form.champinion.data:
+            ingredientes_seleccionados.append("Champiñones")
+        if pizzas_form.pina.data:
+            ingredientes_seleccionados.append("Piña")
+
+        subTotal = calcular_subtotal(tamaño, numPizzas, ingredientes_seleccionados)
+
+        guardar_pedido(tamaño, ingredientes_seleccionados, numPizzas, subTotal)
+
+        with open("pedidos.txt", "r",  encoding="utf-8") as file:
+            pedidos = file.readlines()
+        pedidos_formateados = []
+        for dato in pedidos:
+            partes = dato.strip().split(", ")
+            pedido = {}
+            for parte in partes:
+                if ": " in parte:
+                    clave, valor = parte.split(": ", 1)
+                else:
+                    clave = parte.split(":")[0]
+                    valor = parte.split(":", 1)[1].strip() if len(parte.split(":")) > 1 else ""
+                if clave == "Ingredientes":
+                    if valor:
+                        if 'Ingredientes' not in pedido:
+                            pedido['Ingredientes'] = []
+                        ingredientes = valor.split(", ")
+                        pedido['Ingredientes'].extend(ingredientes)
+                else:
+                    pedido[clave] = valor
+            pedidos_formateados.append(pedido)
+
+        return render_template("pizzas.html", form=pizzas_form, sub=subTotal, p=pedidos_formateados, nombre=nombre)
+
+    return render_template("pizzas.html", form=pizzas_form)
+
+@app.route("/insertar", methods=["GET", "POST"])
+def insertar_bd():
+    pizzas_form = forms.PizzasForm(request.form)
+    if request.method == "POST":
+        totalBD = 0.0
+        with open("pedidos.txt", "r", encoding="utf-8") as file:
+            pedidos = file.readlines()
+
+        for pedido in pedidos:
+            partes = pedido.strip().split(", ")
+            for parte in partes:
+                if "Subtotal: " in parte:
+                    subtotal = float(parte.split(": ")[1])
+                    totalBD += subtotal
+
+        alum = Pizzas(nombre=pizzas_form.nombre.data,
+                        direccion=pizzas_form.direccion.data,
+                        telefono=pizzas_form.telefono.data,
+                        total=totalBD)
+
+        db.session.add(alum)
+        db.session.commit()
+
+    return render_template("pizzas.html", form=pizzas_form)
+
+
+def calcular_subtotal(tamaño, numPizzas, ingredientes):
+    costo_tamaño = {"Chica": 40, "Mediana": 80, "Grande": 120}
+    costo_ingredientes = 0
+    for ingrediente in ingredientes:
+        costo_ingredientes += 10
+    costo_total = (costo_tamaño[tamaño] + costo_ingredientes) * numPizzas
+    return costo_total
+
+contador_pedidos = 0
+
+def guardar_pedido(tamaño, ingredientes, numPizzas, subTotal):
+    global contador_pedidos
+    contador_pedidos += 1
+    with open("pedidos.txt", "a", encoding="utf-8") as file:
+        ingredientes_str = " y ".join(ingredientes) if ingredientes else ""
+        file.write(f"id: {contador_pedidos}, Tamanio: {tamaño}, Ingredientes: {ingredientes_str}, Numero de Pizzas: {numPizzas}, Subtotal: {subTotal}\n")
+
+
+@app.route('/eliminar_pedido/<int:id>', methods=['GET', 'POST'])
+def eliminar_pedido(id):
+    with open("pedidos.txt", "r", encoding="utf-8") as file:
+        lineas = file.readlines()
+
+    with open("pedidos.txt", "w", encoding="utf-8") as file:
+        for linea in lineas:
+            partes = linea.strip().split(", ")
+            for parte in partes:
+                if "id: " in parte:
+                    pedido_id = int(parte.split(": ")[1])
+                    if pedido_id == id:
+                        break
+            else:
+                file.write(linea)
+
+    return redirect(url_for('pizzas'))
+
+
 
 @app.errorhandler(404)
 def page_not_found(e):

@@ -25,4 +25,5 @@ class Pizzas(db.Model):
     direccion=db.Column(db.String(50))
     telefono=db.Column(db.String(50))
     total=db.Column(db.Double)
-    create_date=db.Column(db.DateTime, default=datetime.datetime.now)
+    fecha_venta = db.Column(db.Date)
+    create_date = db.Column(db.Date, default=datetime.date.today)

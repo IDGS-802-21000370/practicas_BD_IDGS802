@@ -1,3 +1,6 @@
+from datetime import date
+import os
+import datetime
 from flask import Flask, request, render_template, Response, redirect, url_for
 import forms
 from flask_wtf.csrf import CSRFProtect
@@ -10,7 +13,9 @@ csrf=CSRFProtect()
 
 @app.route("/")
 def principal():
-    return render_template("layout2.html")
+    pizza_form=forms.PizzasForm(request.form)
+
+    return render_template("prueba.html", form=pizza_form)
 
 
 @app.route("/alumnos", methods=["GET", "POST"])
@@ -86,66 +91,265 @@ def pizzas():
         tamaño = pizzas_form.tamanioPizza.data
         numPizzas = pizzas_form.numPizzas.data
         ingredientes_seleccionados = []
+        if 'registrar' in request.form:
+            if pizzas_form.jamon.data:
+                ingredientes_seleccionados.append("Jamon")
+            if pizzas_form.champinion.data:
+                ingredientes_seleccionados.append("Champiñones")
+            if pizzas_form.pina.data:
+                ingredientes_seleccionados.append("Piña")
 
-        if pizzas_form.jamon.data:
-            ingredientes_seleccionados.append("Jamon")
-        if pizzas_form.champinion.data:
-            ingredientes_seleccionados.append("Champiñones")
-        if pizzas_form.pina.data:
-            ingredientes_seleccionados.append("Piña")
+            subTotal = calcular_subtotal(tamaño, numPizzas, ingredientes_seleccionados)
 
-        subTotal = calcular_subtotal(tamaño, numPizzas, ingredientes_seleccionados)
+            guardar_pedido(tamaño, ingredientes_seleccionados, numPizzas, subTotal)
 
-        guardar_pedido(tamaño, ingredientes_seleccionados, numPizzas, subTotal)
+            with open("pedidos.txt", "r",  encoding="utf-8") as file:
+                pedidos = file.readlines()
+            pedidos_formateados = []
+            for dato in pedidos:
+                partes = dato.strip().split(", ")
+                pedido = {}
+                for parte in partes:
+                    if ": " in parte:
+                        clave, valor = parte.split(": ", 1)
+                    else:
+                        clave = parte.split(":")[0]
+                        valor = parte.split(":", 1)[1].strip() if len(parte.split(":")) > 1 else ""
+                    if clave == "Ingredientes":
+                        if valor:
+                            if 'Ingredientes' not in pedido:
+                                pedido['Ingredientes'] = []
+                            ingredientes = valor.split(", ")
+                            pedido['Ingredientes'].extend(ingredientes)
+                    else:
+                        pedido[clave] = valor
+                pedidos_formateados.append(pedido)
+            totalBD = 0.0
+            with open("pedidos.txt", "r", encoding="utf-8") as file:
+                pedidos = file.readlines()
 
-        with open("pedidos.txt", "r",  encoding="utf-8") as file:
-            pedidos = file.readlines()
-        pedidos_formateados = []
-        for dato in pedidos:
-            partes = dato.strip().split(", ")
-            pedido = {}
-            for parte in partes:
-                if ": " in parte:
-                    clave, valor = parte.split(": ", 1)
+            for pedido in pedidos:
+                partes = pedido.strip().split(", ")
+                for parte in partes:
+                    if "Subtotal: " in parte:
+                        subtotal = float(parte.split(": ")[1])
+                        totalBD += subtotal
+
+            return render_template("pizzas.html", form=pizzas_form, sub=subTotal, p=pedidos_formateados, nombre=nombre, total=totalBD)
+        elif 'eliminar' in request.form:
+                id = int(request.form['eliminar'])
+                with open("pedidos.txt", "r", encoding="utf-8") as file:
+                    lineas = file.readlines()
+
+                with open("pedidos.txt", "w", encoding="utf-8") as file:
+                    for linea in lineas:
+                        partes = linea.strip().split(", ")
+                        for parte in partes:
+                            if "id: " in parte:
+                                pedido_id = int(parte.split(": ")[1])
+                                if pedido_id == id:
+                                    break
+                        else:
+                            file.write(linea)
+                with open("pedidos.txt", "r",  encoding="utf-8") as file:
+                    pedidos = file.readlines()
+                if len(pedidos) != 0:
+                    pedidos_formateados = []
+                    for dato in pedidos:
+                        partes = dato.strip().split(", ")
+                        pedido = {}
+                        for parte in partes:
+                            if ": " in parte:
+                                clave, valor = parte.split(": ", 1)
+                            else:
+                                clave = parte.split(":")[0]
+                                valor = parte.split(":", 1)[1].strip() if len(parte.split(":")) > 1 else ""
+                            if clave == "Ingredientes":
+                                if valor:
+                                    if 'Ingredientes' not in pedido:
+                                        pedido['Ingredientes'] = []
+                                    ingredientes = valor.split(", ")
+                                    pedido['Ingredientes'].extend(ingredientes)
+                            else:
+                                pedido[clave] = valor
+                        pedidos_formateados.append(pedido)
+                        totalBD = 0.0
+                        with open("pedidos.txt", "r", encoding="utf-8") as file:
+                            pedidos = file.readlines()
+
+                        for pedido in pedidos:
+                            partes = pedido.strip().split(", ")
+                            for parte in partes:
+                                if "Subtotal: " in parte:
+                                    subtotal = float(parte.split(": ")[1])
+                                    totalBD += subtotal
+                    return render_template("pizzas.html", form=pizzas_form, sub=subTotal, p=pedidos_formateados, nombre=nombre, total=totalBD)
                 else:
-                    clave = parte.split(":")[0]
-                    valor = parte.split(":", 1)[1].strip() if len(parte.split(":")) > 1 else ""
-                if clave == "Ingredientes":
-                    if valor:
-                        if 'Ingredientes' not in pedido:
-                            pedido['Ingredientes'] = []
-                        ingredientes = valor.split(", ")
-                        pedido['Ingredientes'].extend(ingredientes)
-                else:
-                    pedido[clave] = valor
-            pedidos_formateados.append(pedido)
+                    return  render_template("pizzas.html", form=pizzas_form, sub=subTotal, nombre=nombre)
+        elif 'insertar' in request.form:
+            pizzas_form = forms.PizzasForm(request.form)
+            totalBD = 0.0
+            with open("pedidos.txt", "r", encoding="utf-8") as file:
+                pedidos = file.readlines()
 
-        return render_template("pizzas.html", form=pizzas_form, sub=subTotal, p=pedidos_formateados, nombre=nombre)
+            for pedido in pedidos:
+                partes = pedido.strip().split(", ")
+                for parte in partes:
+                    if "Subtotal: " in parte:
+                        subtotal = float(parte.split(": ")[1])
+                        totalBD += subtotal
+            alum = Pizzas(nombre=pizzas_form.nombre.data,
+                            direccion=pizzas_form.direccion.data,
+                            telefono=pizzas_form.telefono.data,
+                            total=totalBD,
+                            fecha_venta=pizzas_form.fecha_venta.data)
 
-    return render_template("pizzas.html", form=pizzas_form)
+            db.session.add(alum)
+            db.session.commit()
+            os.remove("pedidos.txt")
+    
+        elif 'obtenerTotalMes' in request.form:
+            fecha_hoy = datetime.datetime.now()
+            v = Pizzas.query.all()
+            pizzas_form = forms.PizzasForm(request.form)
+            nombre_mes = pizzas_form.buscar.data
+            total_mes = 0.0
+            total_dia = 0.0
+            usuarios = []
+            mes = ""
+            for venta in v:
+                if venta.fecha_venta.strftime("%B") == "January":
+                    mes = "Enero"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "February":
+                    mes = "Febrero"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "March":
+                    mes = "Marzo"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "April":
+                    mes = "Abril"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "May":
+                    mes = "Mayo"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "June":
+                    mes = "Junio"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "July":
+                    mes = "Julio"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "August":
+                    mes = "Agosto"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "September":
+                    mes = "Septiembre"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "October":
+                    mes = "Octubre"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "November":
+                    mes = "Noviembre"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%B") == "December":
+                    mes = "Diciembre"
+                    if mes == nombre_mes:
+                        total_mes+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
 
-@app.route("/insertar", methods=["GET", "POST"])
-def insertar_bd():
-    pizzas_form = forms.PizzasForm(request.form)
-    if request.method == "POST":
-        totalBD = 0.0
-        with open("pedidos.txt", "r", encoding="utf-8") as file:
-            pedidos = file.readlines()
+            return render_template("pizzas.html", form=pizzas_form, total_mes=total_mes, usuarios=usuarios)   
 
-        for pedido in pedidos:
-            partes = pedido.strip().split(", ")
-            for parte in partes:
-                if "Subtotal: " in parte:
-                    subtotal = float(parte.split(": ")[1])
-                    totalBD += subtotal
+        elif 'obtenerTotalDia' in request.form:
+            fecha_hoy = datetime.datetime.now()
+            v = Pizzas.query.all()
+            usuarios = []
+            pizzas_form = forms.PizzasForm(request.form)
+            nombre_dia = pizzas_form.buscar.data
+            total_mes = 0.0
+            total_dia = 0.0
+            dia = ""
+            usuarios = []
+            for venta in v:
+                if venta.fecha_venta.strftime("%A") == "Monday":
+                    dia = "Lunes"
+                    if dia == nombre_dia:
+                        total_dia+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%A") == "Tuesday":
+                    dia = "Martes"
+                    if dia == nombre_dia:
+                        total_dia+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%A") == "Wednesday":
+                    dia = "Miercoles"
+                    if dia == nombre_dia:
+                        total_dia+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%A") == "Thursday":
+                    dia = "Jueves"
+                    if dia == nombre_dia:
+                        total_dia+=venta.total
+                        usuario = venta.nombre
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario + "\n")
+                if venta.fecha_venta.strftime("%A") == "Friday":
+                    dia = "Viernes"
+                    if dia == nombre_dia:
+                        total_dia+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%A") == "Saturday":
+                    dia = "Sabado"
+                    if dia == nombre_dia:
+                        total_dia+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
+                if venta.fecha_venta.strftime("%A") == "Sunday":
+                    dia = "Domingo"
+                    if dia == nombre_dia:
+                        total_dia+=venta.total
+                        usuario = venta.nombre + " " + "$"+str(venta.total)
+                        usuarios.append(usuario)
 
-        alum = Pizzas(nombre=pizzas_form.nombre.data,
-                        direccion=pizzas_form.direccion.data,
-                        telefono=pizzas_form.telefono.data,
-                        total=totalBD)
-
-        db.session.add(alum)
-        db.session.commit()
+                
+            return render_template("pizzas.html", form=pizzas_form, total_dia=total_dia, usuarios=usuarios)   
 
     return render_template("pizzas.html", form=pizzas_form)
 

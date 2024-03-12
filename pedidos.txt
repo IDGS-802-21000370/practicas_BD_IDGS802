@@ -1,2 +1,0 @@
-id: 1, Tamanio: Chica, Ingredientes: Jamon y Champiñones y Piña, Numero de Pizzas: 1, Subtotal: 70
-id: 2, Tamanio: Chica, Ingredientes: Jamon, Numero de Pizzas: 3, Subtotal: 150
